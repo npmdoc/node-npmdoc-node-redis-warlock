@@ -1,0 +1,190 @@
+<div class="apidocDiv">
+<style>
+/*csslint
+*/
+.apidocDiv {
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+.apidocDiv a[href] {
+    color: #33f;
+    font-weight: bold;
+    text-decoration: none;
+}
+.apidocDiv a[href]:hover {
+    text-decoration: underline;
+}
+.apidocCodeCommentSpan {
+    background: #bbf;
+    color: #000;
+    display: block;
+}
+.apidocCodeKeywordSpan {
+    color: #d00;
+    font-weight: bold;
+}
+.apidocCodePre {
+    background: #eef;
+    border: 1px solid;
+    color: #777;
+    padding: 5px;
+    white-space: pre-wrap;
+}
+.apidocFooterDiv {
+    margin-top: 20px;
+    text-align: center;
+}
+.apidocModuleLi {
+    margin-top: 10px;
+}
+.apidocSectionDiv {
+    border-top: 1px solid;
+    margin-top: 20px;
+}
+.apidocSignatureSpan {
+    color: #777;
+    font-weight: bold;
+}
+</style>
+<h1>api documentation for
+    <a
+
+        href="https://github.com/thedeveloper/warlock"
+
+    >node-redis-warlock (v0.2.0)</a>
+</h1>
+<h4>Battle-hardened distributed locking using redis</h4>
+<div class="apidocSectionDiv"><a
+    href="#apidoc.tableOfContents"
+    id="apidoc.tableOfContents"
+><h1>table of contents</h1></a><ol>
+
+    <li class="apidocModuleLi"><a href="#apidoc.module.node-redis-warlock">module node-redis-warlock</a><ol>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.node-redis-warlock.node-redis-warlock">
+            function <span class="apidocSignatureSpan"></span>node-redis-warlock
+            <span class="apidocSignatureSpan">(redis)</span>
+            </a>
+
+        </li>
+
+    </ol></li>
+
+</ol></div>
+
+<div class="apidocSectionDiv">
+<h1><a href="#apidoc.module.node-redis-warlock" id="apidoc.module.node-redis-warlock">module node-redis-warlock</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.node-redis-warlock.node-redis-warlock" id="apidoc.element.node-redis-warlock.node-redis-warlock">
+        function <span class="apidocSignatureSpan"></span>node-redis-warlock
+        <span class="apidocSignatureSpan">(redis)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">node-redis-warlock = function (redis){
+  var warlock = {};
+
+  var scripty = new Scripty(redis);
+
+  warlock.makeKey = function(key) {
+    return key + &#x27;:lock&#x27;;
+  };
+
+<span class="apidocCodeCommentSpan">  /**
+   * Set a lock key
+   * @param {string}   key    Name for the lock key. String please.
+   * @param {integer}  ttl    Time in milliseconds for the lock to live.
+   * @param {Function} cb
+   */
+</span>  warlock.lock = function(key, ttl, cb) {
+    cb = cb || function(){};
+
+    if (typeof key !== &#x27;string&#x27;) {
+      return cb(new Error(&#x27;lock key must be string&#x27;));
+    }
+
+    var id;
+    UUID.v1(null, (id = new Buffer(16)));
+    id = id.toString(&#x27;base64&#x27;);
+    redis.set(
+      warlock.makeKey(key), id,
+      &#x27;PX&#x27;, ttl, &#x27;NX&#x27;,
+      function(err, lockSet) {
+        if (err) return cb(err);
+
+        var unlock = warlock.unlock.bind(warlock, key, id);
+        if (!lockSet) unlock = false;
+
+        return cb(err, unlock, id);
+      }
+    );
+
+    return key;
+  };
+
+  warlock.unlock = function(key, id, cb) {
+    cb = cb || function(){};
+
+    if (typeof key !== &#x27;string&#x27;) {
+      return cb(new Error(&#x27;lock key must be string&#x27;));
+    }
+
+    scripty.loadScriptFile(
+      &#x27;parityDel&#x27;,
+      __dirname + &#x27;/lua/parityDel.lua&#x27;,
+      function(err, parityDel){
+        if (err) return cb(err);
+
+        return parityDel.run(1, warlock.makeKey(key), id, cb);
+      }
+    );
+  };
+
+  /**
+   * Set a lock optimistically (retries until reaching maxAttempts).
+   */
+  warlock.optimistic = function(key, ttl, maxAttempts, wait, cb) {
+    var attempts = 0;
+
+    var tryLock = function() {
+      attempts += 1;
+      warlock.lock(key, ttl, function(err, unlock) {
+        if (err) return cb(err);
+
+        if (typeof unlock !== &#x27;function&#x27;) {
+          if (attempts &#x3e;= maxAttempts) {
+            var e = new Error(&#x27;unable to obtain lock&#x27;);
+            e.maxAttempts = maxAttempts;
+            e.key = key;
+            e.ttl = ttl;
+            e.wait = wait;
+            return cb(e);
+          }
+          return setTimeout(tryLock, wait);
+        }
+
+        return cb(err, unlock);
+      });
+    };
+
+    tryLock();
+  };
+
+  return warlock;
+}</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
+
+</div>
+
+<div class="apidocFooterDiv">
+    [ this document was created with
+    <a href="https://github.com/kaizhu256/node-utility2" target="_blank">utility2</a>
+    ]
+</div>
+</div>
